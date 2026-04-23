@@ -1,0 +1,77 @@
+/* Custom CSS for LIME Dashboard */
+
+/* Main container */
+.main .block-container {
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+}
+
+/* Headers */
+h1, h2, h3 {
+    color: #1a1a1a;
+    font-weight: 600;
+}
+
+/* Buttons */
+.stButton > button {
+    border-radius: 8px;
+    font-weight: 600;
+    transition: all 0.3s ease;
+}
+
+.stButton > button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Text area */
+.stTextArea textarea {
+    border-radius: 8px;
+    border: 2px solid #9f3838;
+    transition: border-color 0.3s ease;
+}
+
+.stTextArea textarea:focus {
+    border-color: #4CAF50;
+    box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
+}
+
+/* Metrics */
+[data-testid="metric-container"] {
+    background-color: #f8f9fa;
+    border-radius: 10px;
+    padding: 15px;
+    border: 1px solid #e9ecef;
+}
+
+/* Tabs */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 8px;
+}
+
+.stTabs [data-baseweb="tab"] {
+    border-radius: 8px 8px 0 0;
+    padding: 10px 20px;
+}
+
+/* Sidebar */
+[data-testid="stSidebar"] {
+    background-color: #3176bb;
+}
+
+/* Spinner */
+.stSpinner > div {
+    border-color: #4CAF50 !important;
+}
+
+/* Tooltips */
+[data-testid="stTooltip"] {
+    border-radius: 8px;
+}
+
+/* Expander */
+.streamlit-expanderHeader {
+    font-weight: 600;
+    background-color: #1c3c5c;
+    border-radius: 8px;
+}

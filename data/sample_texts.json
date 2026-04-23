@@ -1,0 +1,24 @@
+{
+  "sentiment_examples": [
+    {
+      "text": "This movie was absolutely fantastic! The acting was superb and the storyline kept me engaged from beginning to end.",
+      "label": "positive"
+    },
+    {
+      "text": "The product arrived damaged and the customer service was terrible. I would not recommend buying from this company.",
+      "label": "negative"
+    },
+    {
+      "text": "The restaurant had average food but the ambiance was nice. Service was okay, nothing special.",
+      "label": "neutral"
+    },
+    {
+      "text": "I'm so excited about the new update! The features are amazing and the interface is so user-friendly.",
+      "label": "positive"
+    },
+    {
+      "text": "Waste of money. The course content was outdated and the instructor was not helpful at all.",
+      "label": "negative"
+    }
+  ]
+}
