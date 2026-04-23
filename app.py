@@ -85,7 +85,6 @@ if 'is_loading' not in st.session_state:
 def load_sentiment_model():
     """Load once, use everywhere - FAST!"""
     from transformers import pipeline
-    # Using DistilBERT for speed (6x faster than BERT)
     return pipeline(
         "sentiment-analysis",
         model="distilbert-base-uncased-finetuned-sst-2-english",
@@ -100,43 +99,35 @@ def get_lime_explanation(_model, text, num_features=10, num_samples=2000):
     
     explainer = lime.lime_text.LimeTextExplainer(
         class_names=['NEGATIVE', 'POSITIVE'],
-        bow=False,  # Faster without bag-of-words
+        bow=False,
         split_expression=lambda x: x.split()
     )
     
     def predict_proba(texts):
-        """Batch prediction for speed"""
         batch_results = _model(texts, truncation=True)
         predictions = []
-        
         for res in batch_results:
             label = res['label'].upper()
             score = res['score']
-            
             if "POS" in label:
                 pos_score = score
                 neg_score = 1 - score
             else:
                 neg_score = score
                 pos_score = 1 - score
-            
             predictions.append([neg_score, pos_score])
-        
         return np.array(predictions)
     
-    # Reduced samples for speed (2000 instead of 5000)
     exp = explainer.explain_instance(
         text,
         predict_proba,
         num_features=num_features,
         num_samples=num_samples
     )
-    
     return exp
 
 @st.cache_data(ttl=3600)
 def precompute_examples(_model, examples):
-    """Pre-compute example predictions"""
     results = {}
     for example in examples:
         result = _model(example, truncation=True)[0]
@@ -169,7 +160,7 @@ with st.sidebar:
     num_features = st.slider(
         "Features to show",
         min_value=5,
-        max_value=15,  # Reduced for speed
+        max_value=15,
         value=8,
         help="Fewer features = faster processing"
     )
@@ -186,7 +177,6 @@ with st.sidebar:
         "Very disappointed with the purchase."
     ]
     
-    # Load model once for examples
     example_model = load_sentiment_model()
     example_results = precompute_examples(example_model, examples)
     
@@ -198,7 +188,6 @@ with st.sidebar:
                 st.session_state.current_exp = None
                 st.rerun()
         with col2:
-            # Show quick prediction badge
             pred = example_results[example]
             label = "😊" if "POS" in pred['label'].upper() else "😞"
             st.caption(label)
@@ -206,7 +195,6 @@ with st.sidebar:
 # ================ MAIN CONTENT ================
 st.subheader("📝 Enter Text to Analyze")
 
-# Text input with auto-clear
 text = st.text_area(
     "",
     value=st.session_state.get('example_text', "I love this movie! It was absolutely fantastic."),
@@ -215,7 +203,6 @@ text = st.text_area(
     help="Press Ctrl+Enter to analyze quickly"
 )
 
-# Analyze button with better feedback
 col1, col2, col3 = st.columns([3, 1, 1])
 with col1:
     analyze_clicked = st.button(
@@ -228,74 +215,61 @@ with col2:
     if st.button("🔄 Clear", use_container_width=True):
         st.session_state.example_text = ""
         st.session_state.current_exp = None
+        st.session_state.is_loading = False
         st.rerun()
 
 # ================ PROCESS ANALYSIS ================
 if analyze_clicked and text.strip():
     st.session_state.is_loading = True
     
-    # Progress container
     progress_container = st.empty()
     with progress_container.container():
         st.markdown("### ⏳ Processing...")
-        
-        # Progress steps
         progress_steps = st.progress(0, text="Starting analysis...")
         
         try:
-            # Step 1: Load model (cached)
             progress_steps.progress(20, text="Loading model (cached)...")
             model = load_sentiment_model()
             
-            # Step 2: Get quick prediction
             progress_steps.progress(40, text="Getting sentiment...")
             result = model(text, truncation=True)[0]
             initial_label = "POSITIVE" if "POS" in result['label'].upper() else "NEGATIVE"
             initial_conf = result['score']
-            
-            # Show quick result
             st.success(f"✅ **Quick Prediction:** {initial_label} ({initial_conf*100:.1f}%)")
             
-            # Step 3: LIME explanation (cached)
             progress_steps.progress(60, text="Generating explanation...")
-            
-            # Use cached LIME function
             exp = get_lime_explanation(
                 model, 
                 text, 
                 num_features=num_features,
-                num_samples=2000  # Reduced for speed
+                num_samples=2000
             )
             
-            # Step 4: Process results
             progress_steps.progress(80, text="Processing visualization...")
-            
-            # Extract features
             exp_map = exp.as_map()
             features = []
             
-            if 1 in exp_map:  # Positive class
+            # FIXED: No len() call, use try-except for IndexedString
+            if 1 in exp_map:
                 for idx, weight in exp_map[1]:
-                    if idx < len(exp.domain_mapper.indexed_string):
+                    try:
                         word = exp.domain_mapper.indexed_string[idx]
-                        # Filter out very small weights
                         if abs(weight) > 0.001:
                             features.append({
                                 'word': word,
                                 'weight': float(weight),
                                 'abs_weight': abs(weight)
                             })
+                    except (IndexError, TypeError, AttributeError):
+                        continue
             
-            # Sort and limit
             features.sort(key=lambda x: x['abs_weight'], reverse=True)
             top_features = features[:num_features]
             
-            # Get LIME prediction
             label_idx = exp.local_pred.argmax()
             lime_label = "POSITIVE" if label_idx == 1 else "NEGATIVE"
             lime_conf = exp.local_pred[label_idx]
             
-            # Store in session
             explanation = {
                 'text': text,
                 'prediction': lime_label,
@@ -310,17 +284,13 @@ if analyze_clicked and text.strip():
             if explanation not in st.session_state.history:
                 st.session_state.history.append(explanation)
             
-            # Clear progress
             progress_steps.progress(100, text="Complete!")
-            
-            # Remove progress container
             progress_container.empty()
             
-            # ================ DISPLAY RESULTS ================
+            # Display results
             st.markdown("---")
             st.subheader("📊 LIME Explanation Results")
             
-            # Quick stats row
             col_stat1, col_stat2, col_stat3, col_stat4 = st.columns(4)
             with col_stat1:
                 st.metric("Prediction", lime_label)
@@ -333,11 +303,8 @@ if analyze_clicked and text.strip():
                 neg_words = len([f for f in top_features if f['weight'] < 0])
                 st.metric("Negative Words", neg_words)
             
-            # Word highlights
             st.markdown("#### 🔍 Word Impact Analysis")
-            
             if top_features:
-                # Positive words
                 positive_words = [f for f in top_features if f['weight'] > 0]
                 if positive_words:
                     st.markdown("**✅ Supporting words:**")
@@ -348,7 +315,6 @@ if analyze_clicked and text.strip():
                         pos_html += f'<span class="positive-word">{word} (+{weight:.3f})</span> '
                     st.markdown(pos_html, unsafe_allow_html=True)
                 
-                # Negative words
                 negative_words = [f for f in top_features if f['weight'] < 0]
                 if negative_words:
                     st.markdown("**❌ Opposing words:**")
@@ -359,24 +325,18 @@ if analyze_clicked and text.strip():
                         neg_html += f'<span class="negative-word">{word} ({weight:.3f})</span> '
                     st.markdown(neg_html, unsafe_allow_html=True)
             
-            # Original text box
             st.markdown("---")
             with st.expander("📝 View Original Text", expanded=True):
                 st.write(text)
             
-            # Visualization
             st.markdown("---")
             st.subheader("📈 Feature Contributions")
-            
             if top_features:
-                # Create simple bar chart
                 import plotly.graph_objects as go
-                
                 df = pd.DataFrame(top_features)
                 df = df.sort_values('weight', ascending=True)
                 
                 fig = go.Figure()
-                
                 fig.add_trace(go.Bar(
                     y=df['word'],
                     x=df['weight'],
@@ -385,7 +345,6 @@ if analyze_clicked and text.strip():
                     text=[f"{w:+.3f}" for w in df['weight']],
                     textposition='auto',
                 ))
-                
                 fig.update_layout(
                     title=f"Top {len(df)} Influential Words",
                     xaxis_title="Contribution Score",
@@ -395,10 +354,8 @@ if analyze_clicked and text.strip():
                     yaxis=dict(autorange="reversed"),
                     plot_bgcolor='rgba(0,0,0,0)',
                 )
-                
                 st.plotly_chart(fig, use_container_width=True)
                 
-                # Data table
                 with st.expander("📋 Detailed Data Table"):
                     display_df = df.copy()
                     display_df = display_df[['word', 'weight']]
@@ -416,8 +373,8 @@ if analyze_clicked and text.strip():
             import traceback
             with st.expander("Debug Details"):
                 st.code(traceback.format_exc())
-    
-    st.session_state.is_loading = False
+        finally:
+            st.session_state.is_loading = False
 
 elif analyze_clicked and not text.strip():
     st.warning("⚠️ Please enter some text to analyze.")
@@ -428,7 +385,6 @@ with st.sidebar:
     st.subheader("📋 Recent Analyses")
     
     if st.session_state.history:
-        # Show last 3 analyses
         for i, item in enumerate(reversed(st.session_state.history[-3:])):
             idx = len(st.session_state.history) - i
             with st.expander(f"Analysis #{idx} - {item['timestamp']}", expanded=False):
@@ -446,13 +402,11 @@ with st.sidebar:
     else:
         st.info("No analyses yet. Try one!")
     
-    # Clear all button
     if st.session_state.history:
         if st.button("🗑️ Clear All History", use_container_width=True, type="secondary"):
             st.session_state.history = []
             st.rerun()
 
-# ================ PERFORMANCE INFO ================
 with st.sidebar:
     st.markdown("---")
     st.markdown("### ⚡ Performance Tips")
@@ -463,6 +417,5 @@ with st.sidebar:
     4. **Fewer features** = quicker results
     """)
 
-# ================ FOOTER ================
 st.markdown("---")
 st.caption("🚀 Built with Streamlit, Transformers, and LIME | **Optimized for Speed** | Interactive NLP Dashboard")
